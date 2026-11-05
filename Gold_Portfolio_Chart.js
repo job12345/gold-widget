@@ -310,7 +310,7 @@ function createChart(history, currentPrice) {
 function createWidget(settings, market, history) {
   const w = new ListWidget();
 
-  w.setPadding(10, 14, 10, 14);
+  w.setPadding(8, 12, 8, 12);
   w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
   w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
   if (!(settings.oz > 0)) {
@@ -432,7 +432,7 @@ function createWidget(settings, market, history) {
   );
 
   const chart = w.addImage(chartImage);
-  chart.imageSize = new Size(280, 38);
+  chart.imageSize = new Size(280, 26);
   chart.centerAlignImage();
 
   w.addSpacer(3);
@@ -488,7 +488,7 @@ function createWidget(settings, market, history) {
 
   text(
     footer,
-    "USD/THB " + fmt(market.fx, 4),
+    "FX " + fmt(market.fx, 2) + " · " + (market.fxUpdated ? new Date(market.fxUpdated).toLocaleDateString("th-TH", {day:"2-digit", month:"2-digit"}) : "ไม่ทราบวันที่"),
     9,
     C.muted
   );
@@ -525,7 +525,6 @@ function createWidget(settings, market, history) {
     Date.now() + 15 * 60 * 1000
   );
 
-  text(w, "FX " + (market.fxUpdated ? new Date(market.fxUpdated).toLocaleDateString("th-TH", {day:"2-digit", month:"2-digit"}) : "ไม่ทราบวันที่"), 8, C.muted);
   return w;
 }
 
