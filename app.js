@@ -9,7 +9,7 @@ fetch('Gold_Portfolio_Chart.js')
     scriptText = text;
     source.value = text;
     document.querySelectorAll('[data-copy]').forEach(button => { button.disabled = false; });
-    status.textContent = 'โค้ด v2.1 พร้อมคัดลอก';
+    status.textContent = 'โค้ด v2.0 พร้อมคัดลอก';
   })
   .catch(() => {
     source.value = 'โหลดโค้ดไม่สำเร็จ กรุณาดาวน์โหลดไฟล์ .js จากลิงก์ด้านบน';
