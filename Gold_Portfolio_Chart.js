@@ -1,11 +1,9 @@
+
 /*
  GOLD PORTFOLIO CHART
  Scriptable iOS - Medium Widget
- Version 2.1
+ Version 2.0
  MasterDiY by.วชิร อัคร
- https://job12345.github.io/gold-widget/
- ข้อมูลพอร์ตเก็บในเครื่องเท่านั้น ไม่ใช่ราคาซื้อขายทองไทย
- FX: https://www.exchangerate-api.com (อัตราอ้างอิงรายวัน)
 
  ต้นทุนรวม USD + จำนวนทอง Troy oz
  จำนวนทองต้องเป็นออนซ์เทียบเท่าทองบริสุทธิ์
@@ -20,8 +18,8 @@ const cachePath = fm.joinPath(dir, "gold-cache.json");
 
 const DEFAULTS = {
   name: "MY GOLD PORTFOLIO",
-  cost: 0,
-  oz: 0
+  cost: 18441,
+  oz: 4.55896
 };
 
 const C = {
@@ -69,36 +67,61 @@ async function fetchJSON(url) {
 }
 
 async function fetchMarket() {
-  const cache = readJSON(cachePath, {}) || {};
-  let { gold, fx, updated, fxUpdated } = cache;
-  let goldLive = false, fxLive = false;
-  // ดึงสองแหล่งพร้อมกัน และเก็บเวลาของแต่ละแหล่งแยกกัน
-  await Promise.all([
-    (async () => {
-      try {
-        const r = await fetchJSON("https://api.gold-api.com/price/XAU");
-        if (Number.isFinite(r.price) && r.price > 0 && Number.isFinite(Date.parse(r.updatedAt))) {
-          gold = r.price; updated = r.updatedAt; goldLive = true;
-        }
-      } catch (e) { console.log("Gold API: " + e.message); }
-    })(),
-    (async () => {
-      try {
-        const r = await fetchJSON("https://open.er-api.com/v6/latest/USD");
-        if (r.result === "success" && Number.isFinite(r.rates?.THB) && r.rates.THB > 0 && r.time_last_update_unix > 0) {
-          fx = r.rates.THB;
-          fxUpdated = new Date(r.time_last_update_unix * 1000).toISOString();
-          fxLive = true;
-        }
-      } catch (e) { console.log("FX API: " + e.message); }
-    })()
-  ]);
-  writeJSON(cachePath, { gold, fx, updated, fxUpdated });
-  if (!(Number.isFinite(gold) && gold > 0 && Number.isFinite(fx) && fx > 0)) return null;
-  const stale = !goldLive || !fxLive || !Number.isFinite(Date.parse(updated)) ||
-    Date.now() - Date.parse(updated) > 3600000 ||
-    !Number.isFinite(Date.parse(fxUpdated)) || Date.now() - Date.parse(fxUpdated) > 48 * 3600000;
-  return { gold, fx, updated, fxUpdated, goldLive, fxLive, stale };
+  const cache = readJSON(cachePath, {});
+  let gold = cache.gold;
+  let fx = cache.fx;
+  let updated = cache.updated;
+  let goldLive = false;
+  let fxLive = false;
+
+  try {
+    const result = await fetchJSON(
+      "https://api.gold-api.com/price/XAU"
+    );
+
+    const p = Number(result.price);
+
+    if (Number.isFinite(p) && p > 0) {
+      gold = p;
+      updated = result.updatedAt ||
+        new Date().toISOString();
+      goldLive = true;
+    }
+  } catch (e) {
+    console.log("Gold API: " + e.message);
+  }
+
+  try {
+    const result = await fetchJSON(
+      "https://open.er-api.com/v6/latest/USD"
+    );
+
+    const rate = Number(result.rates?.THB);
+
+    if (Number.isFinite(rate) && rate > 0) {
+      fx = rate;
+      fxLive = true;
+    }
+  } catch (e) {
+    console.log("FX API: " + e.message);
+  }
+
+  if (!(gold > 0 && fx > 0)) {
+    return null;
+  }
+
+  writeJSON(cachePath, {
+    gold, fx, updated
+  });
+
+  return {
+    gold,
+    fx,
+    updated,
+    live: goldLive && fxLive,
+    goldLive,
+    fxLive
+  };
 }
 
 function saveHistory(price, timestamp) {
@@ -110,7 +133,6 @@ function saveHistory(price, timestamp) {
   const ts = Date.parse(timestamp || "");
 
   const time = Number.isFinite(ts) ? ts : now;
-  if (time < now - 7 * 86400000 || time > now + 60000) return history;
 
   history = history.filter(p =>
     Number.isFinite(p.t) &&
@@ -160,7 +182,7 @@ async function editSettings(old) {
   const next = {
     name: a.textFieldValue(0).trim() ||
       DEFAULTS.name,
-    cost: a.textFieldValue(1).trim() === "" ? NaN : Number(
+    cost: Number(
       a.textFieldValue(1).replace(/,/g, "")
     ),
     oz: Number(
@@ -310,17 +332,7 @@ function createChart(history, currentPrice) {
 function createWidget(settings, market, history) {
   const w = new ListWidget();
 
-  w.setPadding(8, 12, 8, 12);
-  w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
-  w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
-  if (!(settings.oz > 0)) {
-    w.backgroundColor = new Color(C.bg);
-    text(w, "✦ GOLD PORTFOLIO", 14, C.gold, true);
-    w.addSpacer(12);
-    text(w, "แตะเพื่อตั้งค่าพอร์ตของคุณ", 14, C.white);
-    text(w, "ต้นทุนรวม USD • จำนวนทอง Troy oz", 10, C.muted);
-    return w;
-  }
+  w.setPadding(13, 16, 12, 16);
 
   const bg = new LinearGradient();
   bg.colors = [
@@ -346,9 +358,9 @@ function createWidget(settings, market, history) {
 
   text(
     header,
-    market && !market.stale ? "● อ้างอิง" : "● ข้อมูลเก่า",
+    market?.goldLive ? "● LIVE" : "● CACHE",
     9,
-    market && !market.stale ? C.green : C.gold,
+    market?.goldLive ? C.green : C.gold,
     true
   );
 
@@ -399,7 +411,7 @@ function createWidget(settings, market, history) {
   text(
     priceCol,
     "$" + fmt(market.gold),
-    22,
+    25,
     C.white,
     true
   );
@@ -419,7 +431,7 @@ function createWidget(settings, market, history) {
   text(
     gainCol,
     signed(profit),
-    18,
+    20,
     profitColor,
     true
   );
@@ -432,7 +444,7 @@ function createWidget(settings, market, history) {
   );
 
   const chart = w.addImage(chartImage);
-  chart.imageSize = new Size(280, 26);
+  chart.imageSize = new Size(320, 80);
   chart.centerAlignImage();
 
   w.addSpacer(3);
@@ -488,7 +500,7 @@ function createWidget(settings, market, history) {
 
   text(
     footer,
-    "FX " + fmt(market.fx, 2) + " · " + (market.fxUpdated ? new Date(market.fxUpdated).toLocaleDateString("th-TH", {day:"2-digit", month:"2-digit"}) : "ไม่ทราบวันที่"),
+    "USD/THB " + fmt(market.fx, 4),
     9,
     C.muted
   );
@@ -512,7 +524,7 @@ function createWidget(settings, market, history) {
 
   text(
     footer,
-    "ทอง " + updatedText,
+    "อัปเดต " + updatedText,
     9,
     C.muted
   );
@@ -531,7 +543,7 @@ function createWidget(settings, market, history) {
 // MAIN
 let settings = readJSON(settingsPath, null);
 
-if (!settings || !Number.isFinite(settings.cost) || settings.cost < 0 || !Number.isFinite(settings.oz) || settings.oz <= 0 || typeof settings.name !== "string") {
+if (!settings) {
   if (config.runsInWidget) {
     settings = DEFAULTS;
   } else {
@@ -556,11 +568,9 @@ if (!settings || !Number.isFinite(settings.cost) || settings.cost < 0 || !Number
   }
 }
 
-const market = settings.oz > 0 ? await fetchMarket() : null;
+const market = await fetchMarket();
 
 let history = readJSON(historyPath, []);
-if (!Array.isArray(history)) history = [];
-history = history.filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.p) && p.p > 0 && p.t >= Date.now() - 7 * 86400000 && p.t <= Date.now() + 60000).sort((a,b) => a.t-b.t);
 
 if (market && market.goldLive) {
   history = saveHistory(
@@ -582,4 +592,3 @@ if (config.runsInWidget) {
 }
 
 Script.complete();
-
