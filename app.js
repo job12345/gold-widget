@@ -19,7 +19,13 @@ document.querySelectorAll('[data-copy]').forEach(button => {
   button.addEventListener('click', async () => {
     if (!scriptText) return;
     try {
-      await navigator.clipboard.writeText(scriptText);
+      let timeout;
+      try {
+        await Promise.race([
+          navigator.clipboard.writeText(scriptText),
+          new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('clipboard timeout')), 1500); })
+        ]);
+      } finally { clearTimeout(timeout); }
       status.textContent = 'คัดลอกแล้ว ✓ เปิด Scriptable แล้ววางโค้ดได้เลย';
       const label = button.textContent;
       button.textContent = 'คัดลอกแล้ว ✓';
